@@ -7,7 +7,7 @@
     "storybook": "pnpm run -C site/ storybook"
   },
   "devDependencies": {
-    "prettier": "3.0.0"
+    "prettier": "3.3.2"
   },
   "dependencies": {
     "exec": "^0.2.1"
