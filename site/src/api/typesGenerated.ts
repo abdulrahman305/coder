@@ -478,7 +478,6 @@ export interface CreateProvisionerKeyResponse {
 
 // From codersdk/aitasks.go
 export interface CreateTaskRequest {
-	readonly name: string;
 	readonly template_version_id: string;
 	readonly template_version_preset_id?: string;
 	readonly prompt: string;
@@ -1841,6 +1840,9 @@ export interface OrganizationMemberWithUserData extends OrganizationMember {
 // From codersdk/organizations.go
 export interface OrganizationProvisionerDaemonsOptions {
 	readonly Limit: number;
+	readonly Offline: boolean;
+	readonly Status: readonly ProvisionerDaemonStatus[];
+	readonly MaxAge: number;
 	readonly IDs: readonly string[];
 	readonly Tags: Record<string, string>;
 }
