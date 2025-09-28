@@ -157,7 +157,7 @@ func Template(t testing.TB, db database.Store, seed database.Template) database.
 	return template
 }
 
-func APIKey(t testing.TB, db database.Store, seed database.APIKey) (key database.APIKey, token string) {
+func APIKey(t testing.TB, db database.Store, seed database.APIKey, munge ...func(*database.InsertAPIKeyParams)) (key database.APIKey, token string) {
 	id, _ := cryptorand.String(10)
 	secret, _ := cryptorand.String(22)
 	hashed := sha256.Sum256([]byte(secret))
@@ -173,7 +173,7 @@ func APIKey(t testing.TB, db database.Store, seed database.APIKey) (key database
 		}
 	}
 
-	key, err := db.InsertAPIKey(genCtx, database.InsertAPIKeyParams{
+	params := database.InsertAPIKeyParams{
 		ID: takeFirst(seed.ID, id),
 		// 0 defaults to 86400 at the db layer
 		LifetimeSeconds: takeFirst(seed.LifetimeSeconds, 0),
@@ -185,9 +185,14 @@ func APIKey(t testing.TB, db database.Store, seed database.APIKey) (key database
 		CreatedAt:       takeFirst(seed.CreatedAt, dbtime.Now()),
 		UpdatedAt:       takeFirst(seed.UpdatedAt, dbtime.Now()),
 		LoginType:       takeFirst(seed.LoginType, database.LoginTypePassword),
-		Scope:           takeFirst(seed.Scope, database.APIKeyScopeAll),
+		Scopes:          takeFirstSlice([]database.APIKeyScope(seed.Scopes), []database.APIKeyScope{database.ApiKeyScopeCoderAll}),
+		AllowList:       takeFirstSlice(seed.AllowList, database.AllowList{database.AllowListWildcard()}),
 		TokenName:       takeFirst(seed.TokenName),
-	})
+	}
+	for _, fn := range munge {
+		fn(&params)
+	}
+	key, err := db.InsertAPIKey(genCtx, params)
 	require.NoError(t, err, "insert api key")
 	return key, fmt.Sprintf("%s-%s", key.ID, secret)
 }
@@ -862,6 +867,7 @@ func WorkspaceApp(t testing.TB, db database.Store, orig database.WorkspaceApp) d
 		DisplayGroup:         orig.DisplayGroup,
 		Hidden:               orig.Hidden,
 		OpenIn:               takeFirst(orig.OpenIn, database.WorkspaceAppOpenInSlimWindow),
+		Tooltip:              takeFirst(orig.Tooltip, testutil.GetRandomName(t)),
 	})
 	require.NoError(t, err, "insert app")
 	return resource
@@ -1463,6 +1469,71 @@ func ClaimPrebuild(
 	require.NoError(t, err, "claim prebuilt workspace")
 
 	return claimedWorkspace
+}
+
+func AIBridgeInterception(t testing.TB, db database.Store, seed database.InsertAIBridgeInterceptionParams) database.AIBridgeInterception {
+	interception, err := db.InsertAIBridgeInterception(genCtx, database.InsertAIBridgeInterceptionParams{
+		ID:          takeFirst(seed.ID, uuid.New()),
+		InitiatorID: takeFirst(seed.InitiatorID, uuid.New()),
+		Provider:    takeFirst(seed.Provider, "provider"),
+		Model:       takeFirst(seed.Model, "model"),
+		Metadata:    takeFirstSlice(seed.Metadata, json.RawMessage("{}")),
+		StartedAt:   takeFirst(seed.StartedAt, dbtime.Now()),
+	})
+	require.NoError(t, err, "insert aibridge interception")
+	return interception
+}
+
+func AIBridgeTokenUsage(t testing.TB, db database.Store, seed database.InsertAIBridgeTokenUsageParams) database.AIBridgeTokenUsage {
+	usage, err := db.InsertAIBridgeTokenUsage(genCtx, database.InsertAIBridgeTokenUsageParams{
+		ID:                 takeFirst(seed.ID, uuid.New()),
+		InterceptionID:     takeFirst(seed.InterceptionID, uuid.New()),
+		ProviderResponseID: takeFirst(seed.ProviderResponseID, "provider_response_id"),
+		InputTokens:        takeFirst(seed.InputTokens, 100),
+		OutputTokens:       takeFirst(seed.OutputTokens, 100),
+		Metadata:           takeFirstSlice(seed.Metadata, json.RawMessage("{}")),
+		CreatedAt:          takeFirst(seed.CreatedAt, dbtime.Now()),
+	})
+	require.NoError(t, err, "insert aibridge token usage")
+	return usage
+}
+
+func AIBridgeUserPrompt(t testing.TB, db database.Store, seed database.InsertAIBridgeUserPromptParams) database.AIBridgeUserPrompt {
+	prompt, err := db.InsertAIBridgeUserPrompt(genCtx, database.InsertAIBridgeUserPromptParams{
+		ID:                 takeFirst(seed.ID, uuid.New()),
+		InterceptionID:     takeFirst(seed.InterceptionID, uuid.New()),
+		ProviderResponseID: takeFirst(seed.ProviderResponseID, "provider_response_id"),
+		Prompt:             takeFirst(seed.Prompt, "prompt"),
+		Metadata:           takeFirstSlice(seed.Metadata, json.RawMessage("{}")),
+		CreatedAt:          takeFirst(seed.CreatedAt, dbtime.Now()),
+	})
+	require.NoError(t, err, "insert aibridge user prompt")
+	return prompt
+}
+
+func AIBridgeToolUsage(t testing.TB, db database.Store, seed database.InsertAIBridgeToolUsageParams) database.AIBridgeToolUsage {
+	serverURL := sql.NullString{}
+	if seed.ServerUrl.Valid {
+		serverURL = seed.ServerUrl
+	}
+	invocationError := sql.NullString{}
+	if seed.InvocationError.Valid {
+		invocationError = seed.InvocationError
+	}
+	toolUsage, err := db.InsertAIBridgeToolUsage(genCtx, database.InsertAIBridgeToolUsageParams{
+		ID:                 takeFirst(seed.ID, uuid.New()),
+		InterceptionID:     takeFirst(seed.InterceptionID, uuid.New()),
+		ProviderResponseID: takeFirst(seed.ProviderResponseID, "provider_response_id"),
+		Tool:               takeFirst(seed.Tool, "tool"),
+		ServerUrl:          serverURL,
+		Input:              takeFirst(seed.Input, "input"),
+		Injected:           takeFirst(seed.Injected, false),
+		InvocationError:    invocationError,
+		Metadata:           takeFirstSlice(seed.Metadata, json.RawMessage("{}")),
+		CreatedAt:          takeFirst(seed.CreatedAt, dbtime.Now()),
+	})
+	require.NoError(t, err, "insert aibridge tool usage")
+	return toolUsage
 }
 
 func provisionerJobTiming(t testing.TB, db database.Store, seed database.ProvisionerJobTiming) database.ProvisionerJobTiming {

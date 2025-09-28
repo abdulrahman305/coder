@@ -27,6 +27,7 @@ import { delay } from "../utils/delay";
 import { OneWayWebSocket } from "../utils/OneWayWebSocket";
 import { type FieldError, isApiError } from "./errors";
 import type {
+	DeleteExternalAuthByIDResponse,
 	DynamicParametersRequest,
 	PostWorkspaceUsageRequest,
 } from "./typesGenerated";
@@ -425,7 +426,7 @@ export type GetProvisionerDaemonsParams = {
 	offline?: boolean;
 };
 
-export type TasksFilter = {
+type TasksFilter = {
 	username?: string;
 };
 
@@ -1727,7 +1728,9 @@ class ApiMethods {
 			return resp.data;
 		};
 
-	unlinkExternalAuthProvider = async (provider: string): Promise<string> => {
+	unlinkExternalAuthProvider = async (
+		provider: string,
+	): Promise<DeleteExternalAuthByIDResponse> => {
 		const resp = await this.axios.delete(`/api/v2/external-auth/${provider}`);
 		return resp.data;
 	};
@@ -2516,6 +2519,13 @@ class ApiMethods {
 		return res.data;
 	};
 
+	getCustomNotificationTemplates = async () => {
+		const res = await this.axios.get<TypesGen.NotificationTemplate[]>(
+			"/api/v2/notifications/templates/custom",
+		);
+		return res.data;
+	};
+
 	getNotificationDispatchMethods = async () => {
 		const res = await this.axios.get<TypesGen.NotificationMethodsResponse>(
 			"/api/v2/notifications/dispatch-methods",
@@ -2686,8 +2696,8 @@ class ExperimentalApiMethods {
 	createTask = async (
 		user: string,
 		req: TypesGen.CreateTaskRequest,
-	): Promise<TypesGen.Workspace> => {
-		const response = await this.axios.post<TypesGen.Workspace>(
+	): Promise<TypesGen.Task> => {
+		const response = await this.axios.post<TypesGen.Task>(
 			`/api/experimental/tasks/${user}`,
 			req,
 		);

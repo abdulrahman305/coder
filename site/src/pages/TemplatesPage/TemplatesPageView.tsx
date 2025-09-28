@@ -1,5 +1,4 @@
 import type { Interpolation, Theme } from "@emotion/react";
-import ArrowForwardOutlined from "@mui/icons-material/ArrowForwardOutlined";
 import Skeleton from "@mui/material/Skeleton";
 import { hasError, isApiValidationError } from "api/errors";
 import type { Template, TemplateExample } from "api/typesGenerated";
@@ -12,11 +11,11 @@ import { Button } from "components/Button/Button";
 import {
 	HelpTooltip,
 	HelpTooltipContent,
+	HelpTooltipIconTrigger,
 	HelpTooltipLink,
 	HelpTooltipLinksGroup,
 	HelpTooltipText,
 	HelpTooltipTitle,
-	HelpTooltipTrigger,
 } from "components/HelpTooltip/HelpTooltip";
 import { Margins } from "components/Margins/Margins";
 import {
@@ -38,7 +37,7 @@ import {
 	TableRowSkeleton,
 } from "components/TableLoader/TableLoader";
 import { useClickableTableRow } from "hooks/useClickableTableRow";
-import { PlusIcon } from "lucide-react";
+import { ArrowRightIcon, PlusIcon } from "lucide-react";
 import { linkToTemplate, useLinks } from "modules/navigation";
 import type { WorkspacePermissions } from "modules/permissions/workspaces";
 import type { FC } from "react";
@@ -72,7 +71,7 @@ const Language = {
 const TemplateHelpTooltip: FC = () => {
 	return (
 		<HelpTooltip>
-			<HelpTooltipTrigger />
+			<HelpTooltipIconTrigger />
 			<HelpTooltipContent>
 				<HelpTooltipTitle>{Language.templateTooltipTitle}</HelpTooltipTitle>
 				<HelpTooltipText>{Language.templateTooltipText}</HelpTooltipText>
@@ -172,7 +171,7 @@ const TemplateRow: FC<TemplateRowProps> = ({
 						}}
 					>
 						<RouterLink to={`${templatePageLink}/workspace`}>
-							<ArrowForwardOutlined />
+							<ArrowRightIcon />
 							Create Workspace
 						</RouterLink>
 					</Button>

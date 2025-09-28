@@ -1,14 +1,16 @@
+import { API } from "api/api";
 import { getErrorDetail, getErrorMessage } from "api/errors";
 import { templateVersionPresets } from "api/queries/templates";
 import type {
 	Preset,
+	Task,
 	Template,
 	TemplateVersionExternalAuth,
 } from "api/typesGenerated";
 import { ErrorAlert } from "components/Alert/ErrorAlert";
 import { Button } from "components/Button/Button";
 import { ExternalImage } from "components/ExternalImage/ExternalImage";
-import { displayError } from "components/GlobalSnackbar/utils";
+import { displayError, displaySuccess } from "components/GlobalSnackbar/utils";
 import { Link } from "components/Link/Link";
 import {
 	Select,
@@ -27,14 +29,12 @@ import {
 } from "components/Tooltip/Tooltip";
 import { useAuthenticated } from "hooks/useAuthenticated";
 import { useExternalAuth } from "hooks/useExternalAuth";
-import { RedoIcon, RotateCcwIcon, SendIcon } from "lucide-react";
-import { AI_PROMPT_PARAMETER_NAME, type Task } from "modules/tasks/tasks";
+import { ArrowUpIcon, RedoIcon, RotateCcwIcon } from "lucide-react";
+import { AI_PROMPT_PARAMETER_NAME } from "modules/tasks/tasks";
 import { type FC, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "react-query";
-import { useNavigate } from "react-router";
 import TextareaAutosize from "react-textarea-autosize";
 import { docs } from "utils/docs";
-import { data } from "./data";
 
 const textareaPlaceholder = "Prompt your AI agent to start a task...";
 
@@ -49,8 +49,6 @@ export const TaskPrompt: FC<TaskPromptProps> = ({
 	error,
 	onRetry,
 }) => {
-	const navigate = useNavigate();
-
 	if (error) {
 		return <TaskPromptLoadingError error={error} onRetry={onRetry} />;
 	}
@@ -63,8 +61,8 @@ export const TaskPrompt: FC<TaskPromptProps> = ({
 	return (
 		<CreateTaskForm
 			templates={templates}
-			onSuccess={(task) => {
-				navigate(`/tasks/${task.workspace.owner_name}/${task.workspace.name}`);
+			onSuccess={() => {
+				displaySuccess("Task created successfully");
 			}}
 		/>
 	);
@@ -108,8 +106,8 @@ const TaskPromptSkeleton: FC = () => {
 
 				{/* Bottom controls skeleton */}
 				<div className="flex items-center justify-between pt-2">
-					<Skeleton className="w-[208px] h-8" />
-					<Skeleton className="w-[96px] h-8" />
+					<Skeleton className="w-[160px] h-8 rounded-full" />
+					<Skeleton className="size-8 rounded-full" />
 				</div>
 			</div>
 		</div>
@@ -162,15 +160,17 @@ const CreateTaskForm: FC<CreateTaskFormProps> = ({ templates, onSuccess }) => {
 	} = useExternalAuth(selectedTemplate.active_version_id);
 
 	// Fetch presets when template changes
-	const { data: presets, isLoading: isLoadingPresets } = useQuery(
+	const { data: presets } = useQuery(
 		templateVersionPresets(selectedTemplate.active_version_id),
 	);
-	const defaultPreset = presets?.find((p) => p.Default);
 
 	// Handle preset selection when data changes
 	useEffect(() => {
-		setSelectedPresetId(defaultPreset?.ID);
-	}, [defaultPreset?.ID]);
+		if (presets && presets.length > 0) {
+			const defaultPreset = presets.find((p) => p.Default) || presets[0];
+			setSelectedPresetId(defaultPreset.ID);
+		}
+	}, [presets]);
 
 	// Extract AI prompt from selected preset
 	const selectedPreset = presets?.find((p) => p.ID === selectedPresetId);
@@ -188,16 +188,14 @@ const CreateTaskForm: FC<CreateTaskFormProps> = ({ templates, onSuccess }) => {
 
 	const createTaskMutation = useMutation({
 		mutationFn: async ({ prompt }: CreateTaskMutationFnProps) =>
-			data.createTask(
+			createTaskWithLatestTemplateVersion(
 				prompt,
 				user.id,
-				selectedTemplate.active_version_id,
+				selectedTemplate.id,
 				selectedPresetId,
 			),
 		onSuccess: async (task) => {
-			await queryClient.invalidateQueries({
-				queryKey: ["tasks"],
-			});
+			await queryClient.invalidateQueries({ queryKey: ["tasks"] });
 			onSuccess(task);
 		},
 	});
@@ -229,7 +227,7 @@ const CreateTaskForm: FC<CreateTaskFormProps> = ({ templates, onSuccess }) => {
 			{externalAuthError && <ErrorAlert error={externalAuthError} />}
 
 			<fieldset
-				className="border border-border border-solid rounded-lg p-4"
+				className="border border-border border-solid rounded-3xl p-4"
 				disabled={createTaskMutation.isPending}
 			>
 				<label
@@ -255,23 +253,22 @@ const CreateTaskForm: FC<CreateTaskFormProps> = ({ templates, onSuccess }) => {
 						}`}
 				/>
 				<div className="flex items-center justify-between pt-2">
-					<div className="flex items-center gap-4">
-						<div className="flex flex-col gap-1">
-							<label
-								htmlFor="templateID"
-								className="text-xs font-medium text-content-primary"
-							>
+					<div className="flex items-center gap-2">
+						<div>
+							<label htmlFor="templateID" className="sr-only">
 								Template
 							</label>
 							<Select
 								name="templateID"
-								onValueChange={(value) => setSelectedTemplateId(value)}
+								onValueChange={(value) => {
+									setSelectedTemplateId(value);
+								}}
 								defaultValue={templates[0].id}
 								required
 							>
 								<SelectTrigger
 									id="templateID"
-									className="w-80 text-xs [&_svg]:size-icon-xs border-0 bg-surface-secondary h-8 px-3"
+									className="w-fit text-xs [&_svg]:size-icon-xs border-0 bg-surface-secondary h-8 px-3 rounded-full"
 								>
 									<SelectValue placeholder="Select a template" />
 								</SelectTrigger>
@@ -289,50 +286,34 @@ const CreateTaskForm: FC<CreateTaskFormProps> = ({ templates, onSuccess }) => {
 							</Select>
 						</div>
 
-						{isLoadingPresets ? (
-							<div className="flex flex-col gap-1">
-								<label
-									htmlFor="presetID"
-									className="text-xs font-medium text-content-primary"
-								>
+						{selectedPresetId && (
+							<div>
+								<label htmlFor="presetID" className="sr-only">
 									Preset
 								</label>
-								<Skeleton className="w-[320px] h-8" />
+								<Select
+									key={`preset-select-${selectedTemplate.active_version_id}`}
+									name="presetID"
+									value={selectedPresetId}
+									onValueChange={setSelectedPresetId}
+								>
+									<SelectTrigger
+										id="presetID"
+										className="w-fit text-xs [&_svg]:size-icon-xs border-0 bg-surface-secondary h-8 px-3 rounded-full"
+									>
+										<SelectValue placeholder="Select a preset" />
+									</SelectTrigger>
+									<SelectContent>
+										{presets?.toSorted(sortByDefault).map((preset) => (
+											<SelectItem value={preset.ID} key={preset.ID}>
+												<span className="overflow-hidden text-ellipsis block">
+													{preset.Name} {preset.Default && "(Default)"}
+												</span>
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 							</div>
-						) : (
-							presets &&
-							presets.length > 0 && (
-								<div className="flex flex-col gap-1">
-									<label
-										htmlFor="presetID"
-										className="text-xs font-medium text-content-primary"
-									>
-										Preset
-									</label>
-									<Select
-										key={`preset-select-${selectedTemplate.active_version_id}`}
-										name="presetID"
-										value={selectedPresetId || undefined}
-										onValueChange={setSelectedPresetId}
-									>
-										<SelectTrigger
-											id="presetID"
-											className="w-80 text-xs [&_svg]:size-icon-xs border-0 bg-surface-secondary h-8 px-3"
-										>
-											<SelectValue placeholder="Select a preset" />
-										</SelectTrigger>
-										<SelectContent>
-											{presets.toSorted(sortByDefault).map((preset) => (
-												<SelectItem value={preset.ID} key={preset.ID}>
-													<span className="overflow-hidden text-ellipsis block">
-														{preset.Name} {preset.Default && "(Default)"}
-													</span>
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</div>
-							)
 						)}
 					</div>
 
@@ -344,7 +325,12 @@ const CreateTaskForm: FC<CreateTaskFormProps> = ({ templates, onSuccess }) => {
 							/>
 						)}
 
-						<Button size="sm" type="submit" disabled={isMissingExternalAuth}>
+						<Button
+							size="icon"
+							className="rounded-full"
+							type="submit"
+							disabled={isMissingExternalAuth}
+						>
 							<Spinner
 								loading={
 									isLoadingExternalAuth ||
@@ -352,9 +338,9 @@ const CreateTaskForm: FC<CreateTaskFormProps> = ({ templates, onSuccess }) => {
 									createTaskMutation.isPending
 								}
 							>
-								<SendIcon />
+								<ArrowUpIcon />
 							</Spinner>
-							Run task
+							<span className="sr-only">Run task</span>
 						</Button>
 					</div>
 				</div>
@@ -384,6 +370,7 @@ const ExternalAuthButtons: FC<ExternalAuthButtonProps> = ({
 			<div className="flex items-center gap-2" key={auth.id}>
 				<Button
 					variant="outline"
+					className="rounded-full"
 					size="sm"
 					disabled={isPollingExternalAuth || auth.authenticated}
 					onClick={() => {
@@ -431,4 +418,22 @@ function sortByDefault(a: Preset, b: Preset) {
 	if (!a.Default && b.Default) return 1;
 	// Otherwise, sort alphabetically by name
 	return a.Name.localeCompare(b.Name);
+}
+
+// TODO: Enforce task creation to always use the latest active template version.
+// During task creation, the active version might change between template load
+// and user action. Since handling this in the FE cannot guarantee correctness,
+// we should move the logic to the BE after the experimental phase.
+async function createTaskWithLatestTemplateVersion(
+	input: string,
+	userId: string,
+	templateId: string,
+	presetId: string | undefined,
+): Promise<Task> {
+	const template = await API.getTemplate(templateId);
+	return API.experimental.createTask(userId, {
+		input,
+		template_version_id: template.active_version_id,
+		template_version_preset_id: presetId,
+	});
 }
